@@ -20,7 +20,6 @@
 const SUPPORT_PATH =
   "/home/caturria/casturria_support/lib/libcasturria_support.so"; //Very temporary.
 const SupportLayer = Deno.dlopen(SUPPORT_PATH, {
-
   //Decoding:
 
   casturria_newDecoder: {
@@ -95,4 +94,20 @@ const SupportLayer = Deno.dlopen(SUPPORT_PATH, {
     nonblocking: true,
   },
 });
-export { SupportLayer };
+
+export type AudioBuffer = Float32Array<ArrayBuffer>;
+
+/**
+ * Converts a JS string into a C-string for use with FFI.
+ * @param str the string to convert.
+ */
+function toCString(str: string): BufferSource {
+  const textEncoder = new TextEncoder();
+  return textEncoder.encode(`${str}\0`);
+}
+globalThis.addEventListener("unload", () => {
+  SupportLayer.close();
+});
+
+const { symbols } = SupportLayer;
+export { symbols, toCString };

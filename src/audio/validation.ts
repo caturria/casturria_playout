@@ -22,7 +22,7 @@ const maxSampleRate = 192000;
 const minChannels = 1;
 const maxChannels = 6;
 
-const {InvalidData} = Deno.errors;
+const { InvalidData } = Deno.errors;
 
 /**
  * Verifies that a sample rate is within the acceptable range.
@@ -30,18 +30,16 @@ const {InvalidData} = Deno.errors;
  * @throws {InvalidData} if the supplied value is invalid.
  * @returns the supplied value.
  */
-function validateSampleRate(rate: number): number
-{
-    if (
-      !Number.isSafeInteger(rate) || rate < minSampleRate ||
-      rate > maxSampleRate
-    ) {
-      throw new InvalidData(
-        `The 'sampleRate' argument must be an integer between ${minSampleRate} and ${maxSampleRate}.`,
-      );
-    }
-    return rate;
-
+function validateSampleRate(rate: number): number {
+  if (
+    !Number.isSafeInteger(rate) || rate < minSampleRate ||
+    rate > maxSampleRate
+  ) {
+    throw new InvalidData(
+      `The 'sampleRate' argument must be an integer between ${minSampleRate} and ${maxSampleRate}.`,
+    );
+  }
+  return rate;
 }
 
 /**
@@ -50,16 +48,15 @@ function validateSampleRate(rate: number): number
  * @throws {BadData} if the supplied value is invalid.
  * @returns the supplied value.
  */
-function validateChannelCount(channels: number): number
-{
-    if (
-      !Number.isSafeInteger(channels) || channels < minChannels ||
-      channels > maxChannels
-    ) {
-      throw new InvalidData(
-        `The 'channels' argument must be an integer between ${minChannels} and ${maxChannels}.`,
-      );
-    }
-return channels;
+function validateChannelCount(channels: number): number {
+  if (
+    !Number.isSafeInteger(channels) || channels < minChannels ||
+    channels > maxChannels
+  ) {
+    throw new InvalidData(
+      `The 'channels' argument must be an integer between ${minChannels} and ${maxChannels}.`,
+    );
+  }
+  return channels;
 }
-export {validateChannelCount, validateSampleRate};
+export { validateChannelCount, validateSampleRate };

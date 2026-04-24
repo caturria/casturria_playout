@@ -1,48 +1,36 @@
-import { Buffer } from "node:buffer";
-import { AudioEvents } from "./audio/events.ts";
-import {SupportLayer} from "./audio/supportlayer.ts";
+import { AudioEvent } from "./audio/events.ts";
+import { Decoder } from "./audio/decoder.ts";
+import { Encoder } from "./audio/encoder.ts";
+using decoder = new Decoder();
+decoder.addEventListener("setupMilestone", (event: Event) => {
+  if (!(event instanceof AudioEvent)) {
+    return;
+  }
+  console.log(
+    `Wow! The decoder spit out an event of type ${event.type} with the message: "${event.message}"`,
+  );
+});
 
-const eventHandler = SupportLayer.symbols.casturria_newEventHandler();
-const callback = new Deno.UnsafeCallback(
-    {parameters: ["u32", "pointer"],
-        result: "void"} as const,
-        (type: number, details: Deno.PointerValue <unknown>) => {
-            console.log(`Got event ${type}.`);
+await decoder.open("/home/caturria/tempsong.flac", 48000, 2); //Production code would catch this.
+using encoder = new Encoder();
+encoder.addEventListener("setupMilestone", (event: Event) => {
+  if (!(event instanceof AudioEvent)) {
+    return;
+  }
+  console.log(
+    `Wow! The encoder spit out an event of type ${event.type} with the message: "${event.message}"`,
+  );
+});
 
-        });
+await encoder.open("/home/caturria/test.opus", 48000, 2, { bitRate: 192000 }); //Production code would catch this.
 
-        SupportLayer.symbols.casturria_subscribeToEvent(eventHandler, AudioEvents.EVENTTYPE_DECODE_CONFIGURED_CODEC, true);
-
-const filename = Buffer.from("/home/caturria/tempsong.flac");
-const decoder = await SupportLayer.symbols.casturria_newDecoder(filename, eventHandler, callback.pointer, 48000, 2);
-if(decoder == null)
-{
-    console.log("Failed to open decoder.");
-    Deno.exit(0);
+while (true) {
+  const buffer = await decoder.decode(1024);
+  await encoder.encode(buffer);
+  if (buffer.length < 1024 * decoder.channels) {
+    break;
+  }
 }
-
-const samples = BigInt(1024);
-const buffer = new Float32Array(Number(samples) * 2);
-console.log(`Length is ${buffer.length}`);
-const encoder = await SupportLayer.symbols.casturria_newEncoder(Buffer.from("/home/caturria/test.wav"), eventHandler, callback.pointer, 48000, 2, null);
-if(encoder == null)
-{
-    console.log("Failed to open encoder.");
-    Deno.exit(0);
-}
-
-while(true)
-{
-    const result = await SupportLayer.symbols.casturria_decode(decoder, buffer, BigInt(samples));
-    await SupportLayer.symbols.casturria_encode(encoder, buffer, result);
-    if(result < samples)
-    {
-        break;
-    }
-}
-
-await SupportLayer.symbols.casturria_finalizeEncoder(encoder);
-await SupportLayer.symbols.casturria_freeEncoder(encoder);
-await SupportLayer.symbols.casturria_freeDecoder(decoder);
+await encoder.finalize();
 
 console.log("Done.");
