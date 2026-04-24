@@ -20,104 +20,94 @@
 import { SupportLayer } from "./supportlayer.ts";
 import { Mutex } from "./mutex.ts";
 import { Buffer } from "node:buffer";
+import { EventCallback, EventCodes, makeEventCallback, AudioEvent } from "./events.ts";
+import {validateChannelCount, validateSampleRate} from "./validation.ts";
 
-type EventCallback = Deno.UnsafeCallback<
-  { readonly parameters: readonly ["u32", "pointer"]; readonly result: "void" }
->;
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
-const { BadResource, InvalidData } = Deno.errors;
+const { BadResource} = Deno.errors;
 
-//Singleton EventHandler instance for all decoders.
-const eventHandler = SupportLayer.symbols.casturria_newEventHandler();
-
-const minSampleRate = 2000;
-const maxSampleRate = 192000;
-const minChannels = 1;
-const maxChannels = 6;
-
-/**
- * A callback for use with the support layer's event handler.
- * @param type the event that was triggered.
- * @param details the event details returned from the support layer.
- */
-function eventCallback(
-  type: number,
-  _details: Deno.PointerValue<unknown>,
-): void {
-  console.log(`Got event ${type}`);
-}
-
-const privateKey = {}; //prevent outside construction.
-
-class Decoder {
+class Decoder extends EventTarget {
   #handle: Deno.PointerValue<unknown> | null = null; //Raw asset from the support layer.
   #callback: EventCallback; //The support layer uses this callback to report various success/ failure events.
-  #callbackFreed: boolean = false; //used to make free idempotent.
+  #closed: boolean = false; //used to make close idempotent.
   #mutex: Mutex = new Mutex(); //FFmpeg assets aren't threadsafe. Allow one nonblocking operation at a time.
   #channels: number; //number of output channels configured.
   #sampleRate: number; //the configured output sample rate.
+  #lastError: string| null = null;//We can't throw an error from a support layer callback, so we use this to defer it.
 
   /**
-   * Private constructor.
-   * Constructs the object in an uninitialized state, because the callback needs to be bound before the decoder itself can be created.
-   * @param key private constructor key.
+   * Verifies that a decoder is in a usable state.
+   * @param forOpening if true, verifies that the decoder is ready to be opened.
    */
-  constructor(key: unknown) {
-    if (key !== privateKey) {
-      throw new Deno.errors.NotSupported(
-        "Decoder does not support external construction.",
-      );
+  #verifyDecoder(forOpening: boolean = false)
+  {
+    if(this.#closed === true)
+    {
+      throw new BadResource("This decoder has already been closed.");
     }
-    this.#channels = 0;
-    this.#sampleRate = 0;
-    this.#callback = new Deno.UnsafeCallback({
-      parameters: ["u32", "pointer"],
-      result: "void",
-    }, eventCallback.bind(this));
+    if(forOpening === true && this.#handle !== null)
+    {
+      throw new BadResource("This decoder has already been opened.");
+    }
+    if(forOpening !== true && this.#handle === null)
+    {
+      throw new BadResource("This decoder has not yet been opened.");
+    }
   }
 
   /**
-   * Creates a new decoder.
+   * Constructor.
+   * Constructs the object in an uninitialized state, because event listeners need to be bound before the decoder itself can be created.
+   */
+  constructor() {
+    super();
+    this.#channels = 0;
+    this.#sampleRate = 0;
+    this.#callback = makeEventCallback((code: number, type: string, message: string): void => {
+      if(code === EventCodes.EVENTTYPE_SETUP_FAILURE)
+      {
+        this.#lastError = message;
+        return;
+      }
+      this.dispatchEvent(new AudioEvent(type, code, message));
+    });
+
+  }
+
+  /**
+   * Opens the decoder.
    * @param url the asset to open for decoding.
    * @param sampleRate the sample rate to decode to.
    * @param channels the channel count to decode to.
    */
-  static async make(url: string, sampleRate: number, channels: number) {
-    if (
-      !Number.isSafeInteger(sampleRate) || sampleRate < minSampleRate ||
-      sampleRate > maxSampleRate
-    ) {
-      throw new InvalidData(
-        `The 'sampleRate' argument must be an integer between ${minSampleRate} and ${maxSampleRate}.`,
-      );
-    }
-
-    if (
-      !Number.isSafeInteger(channels) || channels < minChannels ||
-      channels > maxChannels
-    ) {
-      throw new InvalidData(
-        `The 'channels' argument must be an integer between ${minChannels} and ${maxChannels}.`,
-      );
-    }
-
-    const decoder = new Decoder(privateKey);
-    decoder.#channels = channels;
-    decoder.#sampleRate = sampleRate;
-    decoder.#handle = await SupportLayer.symbols.casturria_newDecoder(
+  async open(url: string, sampleRate: number, channels: number) {
+    await this.#mutex.lock <void>(async () => {
+      this.#verifyDecoder(true);
+    let succeeded: boolean = false;
+    this.#channels = validateChannelCount(channels);
+    this.#sampleRate = validateSampleRate(sampleRate);
+    try
+    {
+    this.#handle = await SupportLayer.symbols.casturria_newDecoder(
       Buffer.from(url),
-      eventHandler,
-      decoder.#callback.pointer,
+      this.#callback.pointer,
       sampleRate,
       channels,
     );
-    if (decoder.#handle === null) {
-      throw new Error(
-        "Todo: get some event handling implemented so we know why we fail.",
-      );
+    if (this.#handle === null) {
+      throw new Error(this.#lastError ?? "Unknown error");
     }
-    return decoder;
+    succeeded = true;
+  }
+  finally {
+    if(succeeded === false)
+    {
+      await this.close();
+    }
+  }
+});
+
   }
 
   get channels(): number {
@@ -136,9 +126,7 @@ class Decoder {
    */
   async decode(desiredSamples: number): Promise<AudioBuffer> {
     return await this.#mutex.lock<AudioBuffer>(async () => {
-      if (this.#handle === null) {
-        throw new BadResource("This decoder has already been closed.");
-      }
+      this.#verifyDecoder();
 
       const buffer = new Float32Array(desiredSamples * this.#channels);
       this.#callback.ref(); //Prevent the event loop from shutting down while the callback could fire.
@@ -167,9 +155,9 @@ class Decoder {
         await SupportLayer.symbols.casturria_freeDecoder(this.#handle);
         this.#handle = null;
       }
-      if (this.#callbackFreed === false) {
+      if (this.#closed === false) {
         this.#callback.close();
-        this.#callbackFreed = true;
+        this.#closed = true;
       }
     });
   }

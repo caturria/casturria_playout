@@ -20,33 +20,11 @@
 const SUPPORT_PATH =
   "/home/caturria/casturria_support/lib/libcasturria_support.so"; //Very temporary.
 const SupportLayer = Deno.dlopen(SUPPORT_PATH, {
-  //Event handling:
-
-  casturria_newEventHandler: {
-    parameters: [],
-    result: "pointer",
-  },
-  casturria_freeEventHandler: {
-    parameters: ["pointer"],
-    result: "void",
-  },
-  casturria_subscribeToEvent: {
-    parameters: ["pointer", "u32", "bool"],
-    result: "void",
-  },
-  casturria_getStringDetail: {
-    parameters: ["pointer", "u8"],
-    result: "buffer",
-  },
-  casturria_getIntDetail: {
-    parameters: ["pointer", "u8"],
-    result: "i32",
-  },
 
   //Decoding:
 
   casturria_newDecoder: {
-    parameters: ["buffer", "pointer", "function", "u32", "u8"],
+    parameters: ["buffer", "function", "u32", "u8"],
     result: "pointer",
     nonblocking: true,
   },
@@ -64,7 +42,7 @@ const SupportLayer = Deno.dlopen(SUPPORT_PATH, {
   //Encoding:
 
   casturria_newEncoder: {
-    parameters: ["buffer", "pointer", "function", "u32", "u8", "buffer"],
+    parameters: ["buffer", "function", "u32", "u8", "buffer"],
     result: "pointer",
     nonblocking: true,
   },
@@ -87,7 +65,7 @@ const SupportLayer = Deno.dlopen(SUPPORT_PATH, {
   //Filter graph:
 
   casturria_newFilterGraph: {
-    parameters: ["buffer", "pointer", "function", "u32", "u8", "u32", "u8"],
+    parameters: ["buffer", "function", "u32", "u8", "u32", "u8"],
     result: "pointer",
     nonblocking: true,
   },
