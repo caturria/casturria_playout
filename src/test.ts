@@ -10,14 +10,15 @@ function specialEvent(event: Event) {
     `Wow! It spit out an event of type ${event.type} with the message: "${event.message}"`,
   );
 }
-using decoder = new Decoder();
+await using decoder = new Decoder();
 decoder.addEventListener("setupMilestone", specialEvent);
 await decoder.open("/home/caturria/tempsong.flac", 48000, 2); //Production code would catch this.
 
-using encoder = new Encoder();
+await using encoder = new Encoder();
 encoder.addEventListener("setupMilestone", specialEvent);
 await encoder.open("/home/caturria/test.opus", 48000, 2, { bitRate: 192000 }); //Production code would catch this.
-using graph = new FilterGraph();
+
+await using graph = new FilterGraph();
 graph.addEventListener("setupMilestone", specialEvent);
 await graph.open(
   "anoisesrc=color=pink:sample_rate=48000[0],anoisesrc=color=pink:sample_rate=48000[1],[0][1]amerge[2],[2]amix=inputs=2",

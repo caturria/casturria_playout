@@ -170,7 +170,7 @@ class Encoder extends EventTarget {
     });
   }
 
-  async [Symbol.dispose]() {
+  async [Symbol.asyncDispose]() {
     await this.close();
   }
 }
