@@ -160,7 +160,7 @@ class Encoder extends EventTarget {
   async close() {
     return await this.#mutex.lock<void>(async () => {
       if (this.#handle !== null) {
-        await SupportLayer.symbols.casturria_freeDecoder(this.#handle);
+        await SupportLayer.symbols.casturria_freeEncoder(this.#handle);
         this.#handle = null;
       }
       if (this.#closed === false) {
