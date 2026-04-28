@@ -23,7 +23,7 @@ import * as Events from "./events.ts";
 import * as Validation from "./validation.ts";
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
-const { BadResource, InvalidData } = Deno.errors;
+const { BadResource} = Deno.errors;
 
 class FilterGraph extends EventTarget {
   //This is largely a duplicate of Decoder because JS lacks a reasonable way for a parent class to share private internals with a child. These FFI assets absolutely must be private.
@@ -92,12 +92,10 @@ class FilterGraph extends EventTarget {
   ) {
     await this.#mutex.lock<void>(async () => {
       this.#verifyFilterGraph(true);
-      let succeeded: boolean = false;
-      this.#inChannels = Validation.validateChannelCount(inChannels);
-      this.#inSampleRate = Validation.validateSampleRate(inSampleRate);
-      this.#outChannels = Validation.validateChannelCount(outChannels);
-      this.#outSampleRate = Validation.validateSampleRate(outSampleRate);
-      try {
+      Validation.validateChannelCount(inChannels);
+      Validation.validateSampleRate(inSampleRate);
+      Validation.validateChannelCount(outChannels);
+      Validation.validateSampleRate(outSampleRate);
         this.#handle = await SupportLayer.symbols.casturria_newFilterGraph(
           SupportLayer.toCString(description),
           this.#callback.pointer,
@@ -109,6 +107,12 @@ class FilterGraph extends EventTarget {
         if (this.#handle === null) {
           throw new Error(this.#lastError ?? "Unknown error");
         }
+
+        this.#inChannels = inChannels;
+        this.#inSampleRate = inSampleRate;
+        this.#outChannels = outChannels;
+        this.#outSampleRate = outSampleRate;
+
         //Now that it's been opened, we can query it for the number of usable inputs and outputs.
         this.#inputs = Number(
           await SupportLayer.symbols.casturria_getFilterGraphInputs(
@@ -120,13 +124,6 @@ class FilterGraph extends EventTarget {
             this.#handle,
           ),
         );
-
-        succeeded = true;
-      } finally {
-        if (succeeded === false) {
-          this.close(); //Don't await or it's a deadlock!
-        }
-      }
     });
   }
 
@@ -155,18 +152,23 @@ class FilterGraph extends EventTarget {
    * When there is no more input to filter, send a null buffer to flush the graph, then call receive until no more data comes out.
    */
   async send(buffer: AudioBuffer | null, input: number): Promise<void> {
-    if (buffer !== null && buffer.length % this.#inChannels != 0) {
-      throw new InvalidData(
+    return await this.#mutex.lock<void>(async () => {
+      this.#verifyFilterGraph();
+          if (buffer !== null && buffer.length % this.#inChannels != 0) {
+      throw new RangeError(
         "The provided buffer's length must be divisible by the input channel count.",
       );
     }
-    if (!Number.isSafeInteger(input) || input < 0 || input >= this.#inputs) {
+    if (!Number.isSafeInteger(input)) {
+      throw new TypeError("The 'input' argument must be an integer.");
+    }
+    
+    if(input < 0 || input >= this.#inputs) {
       throw new RangeError("Out of range input for this filtergraph.");
     }
+
     //We copy the buffer to prevent unsafe modification while the job is in flight.
     const bufferCopy = buffer === null ? null : new Float32Array(buffer);
-    return await this.#mutex.lock<void>(async () => {
-      this.#verifyFilterGraph();
       this.#callback.ref(); //Prevent the event loop from shutting down while the callback could fire.
       await SupportLayer.symbols.casturria_sendInput(
         this.#handle,
@@ -189,16 +191,19 @@ class FilterGraph extends EventTarget {
    * Once the graph has been flushed, the final calls may return a smaller final buffer and fire filterComplete.
    */
   async receive(desiredSamples: number, output: number): Promise<AudioBuffer> {
-    if (
-      !Number.isSafeInteger(output) || output < 0 || output >= this.#outputs
+    return await this.#mutex.lock<AudioBuffer>(async () => {
+      this.#verifyFilterGraph();
+          if (
+      !Number.isSafeInteger(output)) {
+        throw new TypeError("The 'input' argument must be an integer.");
+      }
+      if(output < 0 || output >= this.#outputs
     ) {
       throw new RangeError("Out of range output for this filtergraph.");
     }
 
     const buffer = new Float32Array(desiredSamples * this.#outChannels);
 
-    return await this.#mutex.lock<AudioBuffer>(async () => {
-      this.#verifyFilterGraph();
       this.#callback.ref(); //Prevent the event loop from shutting down while the callback could fire.
       const result = Number(
         await SupportLayer.symbols.casturria_receiveOutput(
@@ -230,6 +235,10 @@ class FilterGraph extends EventTarget {
         this.#callback.close();
         this.#closed = true;
       }
+      this.#inChannels = 0;
+      this.#inSampleRate = 0;
+      this.#outChannels = 0;
+      this.#outSampleRate = 0;
     });
   }
 

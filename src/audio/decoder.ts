@@ -144,6 +144,8 @@ class Decoder extends EventTarget {
         this.#callback.close();
         this.#closed = true;
       }
+      this.#channels = 0;
+      this.#sampleRate = 0;
     });
   }
 

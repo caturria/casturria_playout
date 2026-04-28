@@ -23,7 +23,7 @@ import * as Events from "./events.ts";
 import * as Validation from "./validation.ts";
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
-const { BadResource, InvalidData } = Deno.errors;
+const { BadResource} = Deno.errors;
 
 class Encoder extends EventTarget {
   //This is largely a duplicate of Decoder because JS lacks a reasonable way for a parent class to share private internals with a child. These FFI assets absolutely must be private.
@@ -121,7 +121,7 @@ class Encoder extends EventTarget {
     return await this.#mutex.lock<void>(async () => {
       this.#verifyEncoder();
       if (buffer.length % this.#channels != 0) {
-        throw new InvalidData(
+        throw new RangeError(
           "The provided buffer's length must be divisible by the input channel count.",
         );
       }

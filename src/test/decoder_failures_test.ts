@@ -66,6 +66,10 @@ Deno.test("Decoder should detect API abuse", async (_t: Deno.TestContext) => {
     BadResource,
   );
 
+  //The read-only properties shouldn't have been changed by the previous bad call:
+  expect(decoder.sampleRate).toStrictEqual(48000);
+  expect(decoder.channels).toStrictEqual(2);
+
   //The decoder shouldn't allow multiple operations to happen in parallel. The runtime will crash if this doesn't hold because decoders aren't threadsafe.
   for (let i = 0; i < 1000; i++) {
     decoder.decode(32);
@@ -75,6 +79,10 @@ Deno.test("Decoder should detect API abuse", async (_t: Deno.TestContext) => {
 
   //The close() call should be idempotent:
   await expect(decoder.close()).resolves.toBeUndefined();
+
+  //The read-only properties should be zeroed out:
+  expect(decoder.sampleRate).toStrictEqual(0);
+  expect(decoder.channels).toStrictEqual(0);
 
   //It shouldn't try to decode again:
   await expect(decoder.decode(32)).rejects.toThrow(BadResource);
