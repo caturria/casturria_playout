@@ -79,25 +79,19 @@ class Decoder extends EventTarget {
   async open(url: string, sampleRate: number, channels: number) {
     await this.#mutex.lock<void>(async () => {
       this.#verifyDecoder(true);
-      let succeeded: boolean = false;
-      this.#channels = Validation.validateChannelCount(channels);
-      this.#sampleRate = Validation.validateSampleRate(sampleRate);
-      try {
-        this.#handle = await SupportLayer.symbols.casturria_newDecoder(
-          SupportLayer.toCString(url),
-          this.#callback.pointer,
-          sampleRate,
-          channels,
-        );
-        if (this.#handle === null) {
-          throw new Error(this.#lastError ?? "Unknown error");
-        }
-        succeeded = true;
-      } finally {
-        if (succeeded === false) {
-          this.close(); //Don't await or it's a deadlock!
-        }
+      Validation.validateChannelCount(channels);
+      Validation.validateSampleRate(sampleRate);
+      this.#handle = await SupportLayer.symbols.casturria_newDecoder(
+        SupportLayer.toCString(url),
+        this.#callback.pointer,
+        sampleRate,
+        channels,
+      );
+      if (this.#handle === null) {
+        throw new Error(this.#lastError ?? "Unknown error");
       }
+      this.#channels = channels;
+      this.#sampleRate = sampleRate;
     });
   }
 

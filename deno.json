@@ -3,9 +3,21 @@
     "@logtape/logtape": "jsr:@logtape/logtape@^2.0.5",
     "@std/expect": "jsr:@std/expect@^1.0.19",
     "@std/testing": "jsr:@std/testing@^1.0.18",
-        "decoder": "./src/audio/decoder.ts",
+    "decoder": "./src/audio/decoder.ts",
     "encoder": "./src/audio/encoder.ts",
     "filtergraph": "./src/audio/filtergraph.ts",
     "mutex": "./src/audio/mutex.ts"
+  },
+  "test": {
+    "permissions": {
+      "ffi": true,
+      "read": ["./test.flac", "./corrupted.flac"],
+      "write": [
+        "./test.flac",
+        "corrupted.flac",
+        "test.mp3",
+        "inappropriate_container_codec.ogg"
+      ]
+    }
   }
 }

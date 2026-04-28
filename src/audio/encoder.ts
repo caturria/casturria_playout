@@ -89,18 +89,18 @@ class Encoder extends EventTarget {
       this.#verifyEncoder(true);
       Validation.validateChannelCount(channels);
       Validation.validateSampleRate(sampleRate);
-        this.#handle = await SupportLayer.symbols.casturria_newEncoder(
-          SupportLayer.toCString(url),
-          this.#callback.pointer,
-          sampleRate,
-          channels,
-          SupportLayer.toCString(json),
-        );
-        if (this.#handle === null) {
-          throw new Error(this.#lastError ?? "Unknown error");
-        }
-        this.#channels = channels;
-        this.#sampleRate = sampleRate;
+      this.#handle = await SupportLayer.symbols.casturria_newEncoder(
+        SupportLayer.toCString(url),
+        this.#callback.pointer,
+        sampleRate,
+        channels,
+        SupportLayer.toCString(json),
+      );
+      if (this.#handle === null) {
+        throw new Error(this.#lastError ?? "Unknown error");
+      }
+      this.#channels = channels;
+      this.#sampleRate = sampleRate;
     });
   }
 
@@ -120,13 +120,13 @@ class Encoder extends EventTarget {
   async encode(buffer: AudioBuffer): Promise<void> {
     return await this.#mutex.lock<void>(async () => {
       this.#verifyEncoder();
-          if (buffer.length % this.#channels != 0) {
-      throw new InvalidData(
-        "The provided buffer's length must be divisible by the input channel count.",
-      );
-    }
-    //We copy the buffer to prevent unsafe modification while the job is in flight.
-    const bufferCopy = new Float32Array(buffer);
+      if (buffer.length % this.#channels != 0) {
+        throw new InvalidData(
+          "The provided buffer's length must be divisible by the input channel count.",
+        );
+      }
+      //We copy the buffer to prevent unsafe modification while the job is in flight.
+      const bufferCopy = new Float32Array(buffer);
 
       this.#callback.ref(); //Prevent the event loop from shutting down while the callback could fire.
       await SupportLayer.symbols.casturria_encode(

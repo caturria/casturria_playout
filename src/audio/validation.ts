@@ -22,8 +22,6 @@ const maxSampleRate = 192000;
 const minChannels = 1;
 const maxChannels = 6;
 
-const { InvalidData } = Deno.errors;
-
 /**
  * Verifies that a sample rate is within the acceptable range.
  * @param rate the value to validate.
@@ -32,10 +30,15 @@ const { InvalidData } = Deno.errors;
  */
 function validateSampleRate(rate: number): number {
   if (
-    !Number.isSafeInteger(rate) || rate < minSampleRate ||
+    !Number.isSafeInteger(rate)
+  ) {
+    throw new TypeError("The 'sampleRate' argument must be an integer.");
+  }
+  if (
+    rate < minSampleRate ||
     rate > maxSampleRate
   ) {
-    throw new InvalidData(
+    throw new RangeError(
       `The 'sampleRate' argument must be an integer between ${minSampleRate} and ${maxSampleRate}.`,
     );
   }
@@ -50,10 +53,15 @@ function validateSampleRate(rate: number): number {
  */
 function validateChannelCount(channels: number): number {
   if (
-    !Number.isSafeInteger(channels) || channels < minChannels ||
+    !Number.isSafeInteger(channels)
+  ) {
+    throw new TypeError("The 'channels' argument must be an integer.");
+  }
+  if (
+    channels < minChannels ||
     channels > maxChannels
   ) {
-    throw new InvalidData(
+    throw new RangeError(
       `The 'channels' argument must be an integer between ${minChannels} and ${maxChannels}.`,
     );
   }
