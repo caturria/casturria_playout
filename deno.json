@@ -5,6 +5,7 @@
     "@std/testing": "jsr:@std/testing@^1.0.18",
         "decoder": "./src/audio/decoder.ts",
     "encoder": "./src/audio/encoder.ts",
-    "filtergraph": "./src/audio/filtergraph.ts"
+    "filtergraph": "./src/audio/filtergraph.ts",
+    "mutex": "./src/audio/mutex.ts"
   }
 }
