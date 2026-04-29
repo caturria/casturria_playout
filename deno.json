@@ -16,7 +16,8 @@
         "./test.flac",
         "corrupted.flac",
         "test.mp3",
-        "inappropriate_container_codec.ogg"
+        "inappropriate_container_codec.ogg",
+        "pink.flac"
       ]
     }
   }

@@ -143,6 +143,17 @@ class FilterGraph extends EventTarget {
     return this.#outSampleRate;
   }
 
+  get inputs()
+  {
+    return this.#inputs;
+  }
+  
+  get outputs()
+  {
+    return this.#outputs;
+
+  }
+
   /**
    * Attempts to send some audio through the filtergraph.
    * @param buffer a buffer of input audio (will be copied), or null to enter flush mode.
