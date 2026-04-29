@@ -1,4 +1,8 @@
 {
+  "tasks": {
+    "start": "deno --env-file --allow-env --allow-ffi src/app.ts"
+  },
+
   "imports": {
     "@logtape/logtape": "jsr:@logtape/logtape@^2.0.5",
     "@std/expect": "jsr:@std/expect@^1.0.19",

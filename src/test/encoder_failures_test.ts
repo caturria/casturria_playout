@@ -87,9 +87,11 @@ Deno.test("Encoder should detect API abuse", async (_t: Deno.TestContext) => {
   //The read-only properties shouldn't have been changed by the previous bad call:
   expect(encoder.sampleRate).toStrictEqual(48000);
   expect(encoder.channels).toStrictEqual(2);
-  
+
   //It shouldn't accept a misaligned sample buffer (not divisible by number of channels).
-  await expect(encoder.encode(new Float32Array(31))).rejects.toThrow(RangeError);
+  await expect(encoder.encode(new Float32Array(31))).rejects.toThrow(
+    RangeError,
+  );
 
   //The encoder shouldn't allow multiple operations to happen in parallel. The runtime will crash if this doesn't hold because encoders aren't threadsafe.
   for (let i = 0; i < 1000; i++) {

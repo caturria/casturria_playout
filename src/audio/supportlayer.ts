@@ -17,9 +17,14 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-const SUPPORT_PATH =
-  "/home/caturria/casturria_support/lib/libcasturria_support.so"; //Very temporary.
-const SupportLayer = Deno.dlopen(SUPPORT_PATH, {
+const SUPPORT_PATH = Deno.env.get("SUPPORT_PATH");
+if (typeof SUPPORT_PATH != "string") {
+  throw new Error(
+    "No SUPPORT_PATH defined. The SUPPORT_PATH environment variable must point to the location of a valid libcasturria_support.so library.",
+  );
+}
+
+const SupportLayer = Deno.dlopen(`${SUPPORT_PATH}/libcasturria_support.so`, {
   //Decoding:
 
   casturria_newDecoder: {
