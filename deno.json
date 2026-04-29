@@ -14,6 +14,7 @@
   },
   "test": {
     "permissions": {
+      "env": ["SUPPORT_PATH"],
       "ffi": true,
       "read": ["./test.flac", "./corrupted.flac"],
       "write": [
