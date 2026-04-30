@@ -1,6 +1,7 @@
 {
   "tasks": {
-    "start": "deno --env-file --allow-env --allow-ffi src/app.ts"
+    "start": "deno --env-file --allow-env --allow-ffi src/app.ts",
+    "dev": "deno --env-file --allow-env --allow-ffi src/station_dev.ts"
   },
 
   "imports": {
@@ -10,7 +11,8 @@
     "decoder": "./src/audio/decoder.ts",
     "encoder": "./src/audio/encoder.ts",
     "filtergraph": "./src/audio/filtergraph.ts",
-    "mutex": "./src/audio/mutex.ts"
+    "mutex": "./src/audio/mutex.ts",
+    "station": "./src/station.ts"
   },
   "test": {
     "permissions": {
