@@ -12,7 +12,10 @@
     "encoder": "./src/audio/encoder.ts",
     "filtergraph": "./src/audio/filtergraph.ts",
     "mutex": "./src/audio/mutex.ts",
-    "station": "./src/station.ts"
+    "station": "./src/station.ts",
+    "output": "./src/outputs/output.ts",
+    "errors": "./src/errors.ts",
+    "validation": "./src/audio/validation.ts"
   },
   "test": {
     "permissions": {

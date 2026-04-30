@@ -1,5 +1,6 @@
 import * as Logtape from "@logtape/logtape";
 import { Station } from "station";
+import { Output } from "output";
 
 await Logtape.configure({
   sinks: { console: Logtape.getConsoleSink() },
@@ -17,6 +18,19 @@ await Logtape.configure({
   ],
 });
 
-const station = new Station("test", 48000, 2);
-station.start();
-setTimeout(() => station.stop(), 60000);
+function configureSources() {
+  console.log("Configure sources.");
+}
+
+function configureOutputs() {
+  console.log("Configure outputs.");
+}
+
+const station = await Station.configure(
+  "test",
+  48000,
+  2,
+  configureSources,
+  configureOutputs,
+);
+setTimeout(() => station.close(), 60000);

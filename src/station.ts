@@ -19,8 +19,17 @@
 
 import * as Validation from "./audio/validation.ts";
 import * as Logtape from "@logtape/logtape";
+import * as Errors from "errors";
 
-class Station {
+export type StationToken = Record<PropertyKey, never>;
+export type configureSourceCallback = () => void; //Temporary signature because Source doesn't exist yet.
+export type configureOutputCallback = () => void; //Temporary signature because no outputs have been created yet.
+
+const constructorKey = {};
+let stationBeingConfiguredForInput: Station | null = null; //Refers to the station that's currently configuring sources.
+let stationBeingConfiguredForOutput: Station | null = null; //Refers to the station that's currently configuring outputs.
+
+export class Station {
   #name: string;
   #sampleRate: number;
   #channels: number;
@@ -29,6 +38,7 @@ class Station {
   #running: boolean = false;
   #timeout: number = 0; //Current timeout ID while the station is running.
   #timeoutCallback: () => void; //Just an instance-bound tick() for use with setTimeout.
+  #currentTick: Record<PropertyKey, never> = {}; //Used as an authenticator to prove that a call to a source or output came from the station.
 
   /**
    * Pulls the next frame from the station's source and sends it to all configured outputs.
@@ -43,12 +53,33 @@ class Station {
    * @param sampleRate the station's output sampling rate.
    * @param channels the station's output channel count.
    */
-  constructor(name: string, sampleRate: number, channels: number) {
+  constructor(
+    key: StationToken,
+    name: string,
+    sampleRate: number,
+    channels: number,
+  ) {
+    if (key !== constructorKey) {
+      throw new TypeError(
+        "The 'Station' constructor is not part of the public API. Please call Station.configure instead.",
+      );
+    }
     this.#name = name;
     this.#sampleRate = Validation.validateSampleRate(sampleRate);
     this.#channels = Validation.validateChannelCount(channels);
     this.#logger = Logtape.getLogger(["Stations", name]);
     this.#timeoutCallback = this.#tick.bind(this);
+  }
+
+  /**
+   * Internal: used by sources and outputs to confirm that a call came from the station.
+   * @param token an empty object.
+   * @returns true if the call came from the station.
+   */
+  verifyCallFromStation(token: Record<PropertyKey, never>) {
+    if (token !== this.#currentTick) {
+      throw new Errors.NotPublic();
+    }
   }
 
   get sampleRate() {
@@ -64,24 +95,61 @@ class Station {
   }
 
   /**
-   * Starts up the station.
-   * It will begin sending audio data from its source to its inputs at a regular cadence.
-   * @throws if the station is already running.
+   * Configures a new station.
+   * @param name the station's name for logging purposes.
+   * @param sampleRate the station's output sampling rate.
+   * @param channels the station's output channel count.
+   * @param configureSourceCallback a function that configures and returns the station's input source.
+   * @param configureOutputCallback a function that will configure and return the station's initial outputs.
    */
-  start() {
-    if (this.#running === true) {
-      throw new Error("This station is already running.");
+  static async configure(
+    name: string,
+    sampleRate: number,
+    channels: number,
+    configureSourceCallback: configureSourceCallback,
+    configureOutputCallback: configureOutputCallback,
+  ): Promise<Station> {
+    if (
+      stationBeingConfiguredForInput !== null ||
+      stationBeingConfiguredForOutput !== null
+    ) {
+      throw new Errors.NotNestable(
+        "Only one station can be configured at a time.",
+      );
     }
-    this.#tick(); //It will run by itself from here.
+
+    if (typeof configureSourceCallback !== "function") {
+      throw new TypeError(
+        "The 'configureSourceCallback' argument must be a function.",
+      );
+    }
+
+    if (typeof configureOutputCallback !== "function") {
+      throw new TypeError(
+        "The 'configureOutputCallback' argument must be a function.",
+      );
+    }
+    const station = new Station(constructorKey, name, sampleRate, channels);
+    stationBeingConfiguredForInput = station;
+    stationBeingConfiguredForOutput = station;
+    try {
+      await configureSourceCallback();
+      await configureOutputCallback();
+    } finally {
+      stationBeingConfiguredForInput = null;
+      stationBeingConfiguredForOutput = null;
+    }
+
+    station.#tick(); //It will continue on its own from here.
+    return station;
   }
 
   /**
-   * Stop the station from transmitting.
+   * Stop the station from transmitting and clean up its resources.
    * Idempotent.
    */
-  stop() {
+  close() {
     this.#running = false;
     clearTimeout(this.#timeout);
   }
 }
-export { Station };
