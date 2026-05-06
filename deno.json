@@ -1,10 +1,11 @@
 {
   "tasks": {
-    "start": "deno --env-file --allow-env --allow-ffi src/app.ts",
-    "dev": "deno --env-file --allow-env --allow-ffi src/station_dev.ts"
+    "start": "deno --env-file src/app.ts",
+    "dev": "deno --env-file src/station_dev.ts"
   },
 
   "imports": {
+    "@vendor/supportlayer": "./vendor/casturria_support.mjs",
     "@logtape/logtape": "jsr:@logtape/logtape@^2.0.5",
     "@std/expect": "jsr:@std/expect@^1.0.19",
     "@std/testing": "jsr:@std/testing@^1.0.18",
@@ -14,21 +15,8 @@
     "mutex": "./src/audio/mutex.ts",
     "station": "./src/station.ts",
     "output": "./src/outputs/output.ts",
+    "outputs/standard": "./src/outputs/standard.ts",
     "errors": "./src/errors.ts",
     "validation": "./src/audio/validation.ts"
-  },
-  "test": {
-    "permissions": {
-      "env": ["SUPPORT_PATH"],
-      "ffi": true,
-      "read": ["./test.flac", "./corrupted.flac"],
-      "write": [
-        "./test.flac",
-        "corrupted.flac",
-        "test.mp3",
-        "inappropriate_container_codec.ogg",
-        "pink.flac"
-      ]
-    }
   }
 }

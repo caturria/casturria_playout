@@ -16,58 +16,18 @@
 * You should have received a copy of the GNU Affero General Public License
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
+import { AudioBase } from "./base.ts";
 
 import * as SupportLayer from "./supportlayer.ts";
-import { Mutex } from "./mutex.ts";
-import * as Events from "./events.ts";
-import * as Validation from "./validation.ts";
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
-const { BadResource } = Deno.errors;
-
-class Encoder extends EventTarget {
-  //This is largely a duplicate of Decoder because JS lacks a reasonable way for a parent class to share private internals with a child. These FFI assets absolutely must be private.
-
-  #handle: Deno.PointerValue<unknown> | null = null; //Raw asset from the support layer.
-  #callback: Events.EventCallback; //The support layer uses this callback to report various success/ failure events.
-  #closed: boolean = false; //used to make close idempotent.
-  #mutex: Mutex = new Mutex(); //FFmpeg assets aren't threadsafe. Allow one nonblocking operation at a time.
-  #sampleRate: number = 0; //of the incoming audio.
-  #channels: number = 0; //of the incoming audio.
-
-  #lastError: string | null = null; //We can't throw an error from a support layer callback, so we use this to defer it.
-
-  /**
-   * Verifies that an encoder is in a usable state.
-   * @param forOpening if true, verifies that the encoder is ready to be opened.
-   */
-  #verifyEncoder(forOpening: boolean = false) {
-    if (this.#closed === true) {
-      throw new BadResource("This encoder has already been closed.");
-    }
-    if (forOpening === true && this.#handle !== null) {
-      throw new BadResource("This encoder has already been opened.");
-    }
-    if (forOpening !== true && this.#handle === null) {
-      throw new BadResource("This encoder has not yet been opened.");
-    }
-  }
-
+export class Encoder extends AudioBase {
   /**
    * Constructor.
-   * Constructs the object in an uninitialized state, because event listeners need to be bound before the decoder itself can be created.
+   * Constructs the object in an uninitialized state, because event listeners need to be bound before the encoder itself can be created.
    */
   constructor() {
     super();
-    this.#callback = Events.makeEventCallback(
-      (code: number, type: string, message: string): void => {
-        if (code === Events.EventCodes.EVENTTYPE_SETUP_FAILURE) {
-          this.#lastError = message;
-          return;
-        }
-        this.dispatchEvent(new Events.AudioEvent(type, code, message));
-      },
-    );
   }
 
   /**
@@ -77,39 +37,25 @@ class Encoder extends EventTarget {
    * @param channels the channel count of the incoming audio.
    * @param options an optional list of codec, muxer and protocol private options.
    */
-  async open(
+  open(
     url: string,
     sampleRate: number,
     channels: number,
     options: object | null,
   ) {
+    this.verify(true);
+    this.validateSampleRate(sampleRate);
+    this.validateChannelCount(channels);
     const json = JSON.stringify(options ?? {});
-
-    await this.#mutex.lock<void>(async () => {
-      this.#verifyEncoder(true);
-      Validation.validateChannelCount(channels);
-      Validation.validateSampleRate(sampleRate);
-      this.#handle = await SupportLayer.symbols.casturria_newEncoder(
-        SupportLayer.toCString(url),
-        this.#callback.pointer,
-        sampleRate,
-        channels,
-        SupportLayer.toCString(json),
-      );
-      if (this.#handle === null) {
-        throw new Error(this.#lastError ?? "Unknown error");
-      }
-      this.#channels = channels;
-      this.#sampleRate = sampleRate;
-    });
-  }
-
-  get channels(): number {
-    return this.#channels;
-  }
-
-  get sampleRate(): number {
-    return this.#sampleRate;
+    this.pHandle = SupportLayer.casturria_newEncoder(
+      url,
+      this.pCallbackHandle,
+      sampleRate,
+      channels,
+      json,
+    );
+    this.inChannels = channels;
+    this.inSampleRate = sampleRate;
   }
 
   /**
@@ -117,60 +63,48 @@ class Encoder extends EventTarget {
    * @param buffer a buffer of input audio (will be copied).
    * @throws {BadResource} if the decoder has already been closed.
    */
-  async encode(buffer: AudioBuffer): Promise<void> {
-    return await this.#mutex.lock<void>(async () => {
-      this.#verifyEncoder();
-      if (buffer.length % this.#channels != 0) {
-        throw new RangeError(
-          "The provided buffer's length must be divisible by the input channel count.",
-        );
-      }
-      //We copy the buffer to prevent unsafe modification while the job is in flight.
-      const bufferCopy = new Float32Array(buffer);
-
-      this.#callback.ref(); //Prevent the event loop from shutting down while the callback could fire.
-      await SupportLayer.symbols.casturria_encode(
-        this.#handle,
-        bufferCopy,
-        BigInt(buffer.length / this.#channels),
+  encode(buffer: AudioBuffer): void {
+    this.verify();
+    if (buffer.length % this.inChannels != 0) {
+      throw new RangeError(
+        "The provided buffer's length must be divisible by the input channel count.",
       );
-      this.#callback.unref();
-    });
+    }
+    const pMem = SupportLayer.malloc(
+      buffer.length * Float32Array.BYTES_PER_ELEMENT,
+    );
+    try {
+      SupportLayer.instance.HEAPF32.set(
+        buffer,
+        pMem / Float32Array.BYTES_PER_ELEMENT,
+      );
+      SupportLayer.casturria_encode(
+        this.pHandle,
+        pMem,
+        buffer.length / this.inChannels,
+      );
+    } finally {
+      SupportLayer.free(pMem);
+    }
   }
 
   /**
    * Drains the encoder and writes the final few frames.
-   * To be called once before the decoder is closed.
+   * To be called once before the encoder is closed.
    */
-  async finalize() {
-    await this.#mutex.lock<void>(async () => {
-      this.#verifyEncoder();
-      await SupportLayer.symbols.casturria_finalizeEncoder(this.#handle);
-    });
+  finalize() {
+    this.verify();
+    SupportLayer.casturria_finalizeEncoder(this.pHandle);
   }
 
   /**
    * Frees the external resources held by this encoder.
    * Idempotent.
    */
-  async close() {
-    return await this.#mutex.lock<void>(async () => {
-      if (this.#handle !== null) {
-        await SupportLayer.symbols.casturria_freeEncoder(this.#handle);
-        this.#handle = null;
-      }
-      if (this.#closed === false) {
-        this.#callback.close();
-        this.#closed = true;
-      }
-      this.#channels = 0;
-      this.#sampleRate = 0;
-    });
-  }
-
-  async [Symbol.asyncDispose]() {
-    await this.close();
+  override close() {
+    if (this.pHandle !== 0) {
+      SupportLayer.casturria_freeEncoder(this.pHandle);
+    }
+    super.close();
   }
 }
-
-export { Encoder };

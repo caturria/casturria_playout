@@ -17,57 +17,18 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
+import { AudioBase } from "./base.ts";
 import * as SupportLayer from "./supportlayer.ts";
-import { Mutex } from "./mutex.ts";
-import * as Events from "./events.ts";
-import * as Validation from "./validation.ts";
 
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
-const { BadResource } = Deno.errors;
-
-class Decoder extends EventTarget {
-  #handle: Deno.PointerValue<unknown> | null = null; //Raw asset from the support layer.
-  #callback: Events.EventCallback; //The support layer uses this callback to report various success/ failure events.
-  #closed: boolean = false; //used to make close idempotent.
-  #mutex: Mutex = new Mutex(); //FFmpeg assets aren't threadsafe. Allow one nonblocking operation at a time.
-  #channels: number; //number of output channels configured.
-  #sampleRate: number; //the configured output sample rate.
-  #lastError: string | null = null; //We can't throw an error from a support layer callback, so we use this to defer it.
-
-  /**
-   * Verifies that a decoder is in a usable state.
-   * @param forOpening if true, verifies that the decoder is ready to be opened.
-   */
-  #verifyDecoder(forOpening: boolean = false) {
-    if (this.#closed === true) {
-      throw new BadResource("This decoder has already been closed.");
-    }
-    if (forOpening === true && this.#handle !== null) {
-      throw new BadResource("This decoder has already been opened.");
-    }
-    if (forOpening !== true && this.#handle === null) {
-      throw new BadResource("This decoder has not yet been opened.");
-    }
-  }
-
+export class Decoder extends AudioBase {
   /**
    * Constructor.
    * Constructs the object in an uninitialized state, because event listeners need to be bound before the decoder itself can be created.
    */
   constructor() {
     super();
-    this.#channels = 0;
-    this.#sampleRate = 0;
-    this.#callback = Events.makeEventCallback(
-      (code: number, type: string, message: string): void => {
-        if (code === Events.EventCodes.EVENTTYPE_SETUP_FAILURE) {
-          this.#lastError = message;
-          return;
-        }
-        this.dispatchEvent(new Events.AudioEvent(type, code, message));
-      },
-    );
   }
 
   /**
@@ -76,31 +37,19 @@ class Decoder extends EventTarget {
    * @param sampleRate the sample rate to decode to.
    * @param channels the channel count to decode to.
    */
-  async open(url: string, sampleRate: number, channels: number) {
-    await this.#mutex.lock<void>(async () => {
-      this.#verifyDecoder(true);
-      Validation.validateChannelCount(channels);
-      Validation.validateSampleRate(sampleRate);
-      this.#handle = await SupportLayer.symbols.casturria_newDecoder(
-        SupportLayer.toCString(url),
-        this.#callback.pointer,
-        sampleRate,
-        channels,
-      );
-      if (this.#handle === null) {
-        throw new Error(this.#lastError ?? "Unknown error");
-      }
-      this.#channels = channels;
-      this.#sampleRate = sampleRate;
-    });
-  }
+  open(url: string, sampleRate: number, channels: number) {
+    this.verify(true);
+    this.validateChannelCount(channels);
+    this.validateSampleRate(sampleRate);
+    this.pHandle = SupportLayer.casturria_newDecoder(
+      url,
+      this.pCallbackHandle,
+      sampleRate,
+      channels,
+    );
 
-  get channels(): number {
-    return this.#channels;
-  }
-
-  get sampleRate(): number {
-    return this.#sampleRate;
+    this.outChannels = channels;
+    this.outSampleRate = sampleRate;
   }
 
   /**
@@ -109,49 +58,37 @@ class Decoder extends EventTarget {
    * @returns {AudioBuffer} containing the requested number of samples per channel or fiewer.
    * @throws {BadResource} if the decoder has already been closed.
    */
-  async decode(desiredSamples: number): Promise<AudioBuffer> {
-    return await this.#mutex.lock<AudioBuffer>(async () => {
-      this.#verifyDecoder();
-
-      const buffer = new Float32Array(desiredSamples * this.#channels);
-      this.#callback.ref(); //Prevent the event loop from shutting down while the callback could fire.
-      const result = Number(
-        await SupportLayer.symbols.casturria_decode(
-          this.#handle,
-          buffer,
-          BigInt(desiredSamples),
+  decode(desiredSamples: number): AudioBuffer {
+    this.verify();
+    const pMem = SupportLayer.malloc(
+      desiredSamples * this.outChannels * Float32Array.BYTES_PER_ELEMENT,
+    );
+    try {
+      const memOffset = pMem / Float32Array.BYTES_PER_ELEMENT; //Index into HEAPF32.
+      const result = SupportLayer.casturria_decode(
+        this.pHandle,
+        pMem,
+        desiredSamples,
+      );
+      return new Float32Array(
+        SupportLayer.instance.HEAPF32.slice(
+          memOffset,
+          memOffset + (result * this.outChannels),
         ),
       );
-      this.#callback.unref();
-      if (result < desiredSamples) {
-        return buffer.slice(0, result * this.#channels);
-      }
-      return buffer;
-    });
+    } finally {
+      SupportLayer.free(pMem);
+    }
   }
 
   /**
    * Frees the external resources held by this decoder.
    * Idempotent.
    */
-  async close() {
-    return await this.#mutex.lock<void>(async () => {
-      if (this.#handle !== null) {
-        await SupportLayer.symbols.casturria_freeDecoder(this.#handle);
-        this.#handle = null;
-      }
-      if (this.#closed === false) {
-        this.#callback.close();
-        this.#closed = true;
-      }
-      this.#channels = 0;
-      this.#sampleRate = 0;
-    });
-  }
-
-  async [Symbol.asyncDispose]() {
-    await this.close();
+  override close() {
+    if (this.pHandle !== 0) {
+      SupportLayer.casturria_freeDecoder(this.pHandle);
+    }
+    super.close();
   }
 }
-
-export { Decoder };

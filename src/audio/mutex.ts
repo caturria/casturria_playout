@@ -19,6 +19,7 @@
 
 /**
  * A simple mutex for protecting assets such as support layer handles from concurrent access.
+ * As of May 6, 2026 this module is currently unused.
  */
 
 class Mutex {

@@ -39,3 +39,13 @@ export class NotNestable extends Error {
     this.name = "NotNestable";
   }
 }
+
+/**
+ * The requested operation isn't currently possible.
+ */
+export class NotNow extends Error {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "NotNow";
+  }
+}

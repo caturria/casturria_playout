@@ -129,4 +129,4 @@ class AudioEvent extends Event {
   }
 }
 
-export { AudioEvent, EventCodes, makeEventCallback };
+export { AudioEvent, EventCodes, makeEventCallback, translateEventType };
