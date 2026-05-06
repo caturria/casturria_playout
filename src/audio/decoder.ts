@@ -19,6 +19,7 @@
 
 import { AudioBase } from "./base.ts";
 import * as SupportLayer from "./supportlayer.ts";
+import * as Validation from "validation";
 
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
@@ -39,8 +40,8 @@ export class Decoder extends AudioBase {
    */
   open(url: string, sampleRate: number, channels: number) {
     this.verify(true);
-    this.validateChannelCount(channels);
-    this.validateSampleRate(sampleRate);
+    Validation.validateChannelCount(channels);
+    Validation.validateSampleRate(sampleRate);
     this.pHandle = SupportLayer.casturria_newDecoder(
       url,
       this.pCallbackHandle,

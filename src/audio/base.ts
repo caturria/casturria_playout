@@ -18,11 +18,7 @@
 */
 import * as SupportLayer from "./supportlayer.ts";
 import * as Events from "./events.ts";
-
-const minSampleRate = 2000;
-const maxSampleRate = 192000;
-const minChannels = 1;
-const maxChannels = 6;
+import * as Validation from "validation";
 
 const { BadResource } = Deno.errors;
 
@@ -72,61 +68,12 @@ export class AudioBase extends EventTarget {
     );
   }
 
-  /**
-   * Validates a channel count.
-   * @param count the number to validate.
-   * @throws {RangeError} if the provided value is outside the valid range.
-   * @throws {TypeError} if the provided value is not an integer.
-   * @returns the supplied channel count.
-   */
-  protected validateChannelCount(channels: number): number {
-    if (
-      !Number.isSafeInteger(channels)
-    ) {
-      throw new TypeError("A channel count must be an integer.");
-    }
-    if (
-      channels < minChannels ||
-      channels > maxChannels
-    ) {
-      throw new RangeError(
-        `A channel count must be an integer between ${minChannels} and ${maxChannels}.`,
-      );
-    }
-
-    return channels;
-  }
-
-  /**
-   * Validates a sample rate.
-   * @param rate the number to validate.
-   * @throws {RangeError} if the provided value is outside the valid range.
-   * @throws {TypeError} if the provided value is not an integer.
-   * @returns the supplied sample rate.
-   */
-  protected validateSampleRate(rate: number): number {
-    if (
-      !Number.isSafeInteger(rate)
-    ) {
-      throw new TypeError("A sample rate must be an integer.");
-    }
-    if (
-      rate < minSampleRate ||
-      rate > maxSampleRate
-    ) {
-      throw new RangeError(
-        `A sample rate must be an integer between ${minSampleRate} and ${maxSampleRate}.`,
-      );
-    }
-    return rate;
-  }
-
   get inChannels(): number {
     return this.#inChannels;
   }
 
   protected set inChannels(channels: number) {
-    this.#inChannels = this.validateChannelCount(channels);
+    this.#inChannels = Validation.validateChannelCount(channels);
   }
 
   get inSampleRate(): number {
@@ -134,7 +81,7 @@ export class AudioBase extends EventTarget {
   }
 
   protected set inSampleRate(rate: number) {
-    this.#inSampleRate = this.validateSampleRate(rate);
+    this.#inSampleRate = Validation.validateSampleRate(rate);
   }
 
   get outChannels(): number {
@@ -142,7 +89,7 @@ export class AudioBase extends EventTarget {
   }
 
   protected set outChannels(channels: number) {
-    this.#outChannels = this.validateChannelCount(channels);
+    this.#outChannels = Validation.validateChannelCount(channels);
   }
 
   get outSampleRate(): number {
@@ -150,7 +97,7 @@ export class AudioBase extends EventTarget {
   }
 
   protected set outSampleRate(rate: number) {
-    this.#outSampleRate = this.validateSampleRate(rate);
+    this.#outSampleRate = Validation.validateSampleRate(rate);
   }
 
   protected get pHandle() {

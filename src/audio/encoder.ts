@@ -17,8 +17,9 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 import { AudioBase } from "./base.ts";
-
 import * as SupportLayer from "./supportlayer.ts";
+import * as Validation from "validation";
+
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
 export class Encoder extends AudioBase {
@@ -44,8 +45,8 @@ export class Encoder extends AudioBase {
     options: object | null,
   ) {
     this.verify(true);
-    this.validateSampleRate(sampleRate);
-    this.validateChannelCount(channels);
+    Validation.validateSampleRate(sampleRate);
+    Validation.validateChannelCount(channels);
     const json = JSON.stringify(options ?? {});
     this.pHandle = SupportLayer.casturria_newEncoder(
       url,

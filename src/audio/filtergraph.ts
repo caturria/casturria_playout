@@ -19,6 +19,7 @@
 
 import { AudioBase } from "./base.ts";
 import * as SupportLayer from "./supportlayer.ts";
+import * as Validation from "validation";
 export type AudioBuffer = Float32Array<ArrayBuffer>;
 
 export class FilterGraph extends AudioBase {
@@ -52,10 +53,10 @@ export class FilterGraph extends AudioBase {
     outChannels: number,
   ) {
     this.verify(true);
-    this.validateSampleRate(inSampleRate);
-    this.validateChannelCount(inChannels);
-    this.validateSampleRate(outSampleRate);
-    this.validateChannelCount(outChannels);
+    Validation.validateSampleRate(inSampleRate);
+    Validation.validateChannelCount(inChannels);
+    Validation.validateSampleRate(outSampleRate);
+    Validation.validateChannelCount(outChannels);
 
     this.pHandle = SupportLayer.casturria_newFilterGraph(
       description,
