@@ -149,8 +149,4 @@ Deno.test("Validate correctness of Audio processing operations", async (t: Deno.
     }
     expect(outDuration).toStrictEqual(48000 * 2 * 90);
   });
-
-  await t.step("cleanup", (_t: Deno.TestContext) => {
-    expect(Deno.removeSync("./pink.flac")).toBeUndefined();
-  });
 });

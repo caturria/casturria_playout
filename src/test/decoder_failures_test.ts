@@ -1,6 +1,8 @@
 import { Decoder } from "decoder";
 import { Encoder } from "encoder";
 import { expect } from "@std/expect";
+import * as SupportLayer from "supportlayer";
+import { fstat } from "node:fs";
 const { BadResource } = Deno.errors;
 Deno.test("Decoder should fail fast on invalid configuration", (_t: Deno.TestContext) => {
   using decoder = new Decoder();
@@ -46,11 +48,14 @@ Deno.test("Decoder should detect API abuse", (_t: Deno.TestContext) => {
   expect(encoder.close()).toBeUndefined();
 
   //Corrupt the file by reading and writing it as a UTF-8 string:
+  const buffer = SupportLayer.FS.readFile("test.flac", {encoding: "binary", flags: "r"}) as Uint8Array;
+  const corrupted = new TextDecoder().decode(buffer, {});
+
   expect(
-    Deno.writeTextFileSync(
+    SupportLayer.FS.writeFile(
       "./corrupted.flac",
-      Deno.readTextFileSync("./test.flac"),
-    ),
+      corrupted,
+    {flags: "w"}),
   ).toBeUndefined();
 
   //The decoder should not be able to open this file:
@@ -84,8 +89,4 @@ Deno.test("Decoder should detect API abuse", (_t: Deno.TestContext) => {
   expect(() => decoder.open("file:./test.flac", 48000, 2)).toThrow(
     BadResource,
   );
-
-  //Clean up the test files:
-  expect(Deno.removeSync("./test.flac")).toBeUndefined();
-  expect(Deno.removeSync("./corrupted.flac")).toBeUndefined();
 });

@@ -27,10 +27,6 @@ Deno.test("Encoder should fail fast on invalid configuration", (_t: Deno.TestCon
     })
   ).toThrow("Invalid argument");
 
-  //This one leaves a junk file behind:
-  expect(Deno.removeSync("./inappropriate_container_codec.ogg"))
-    .toBeUndefined();
-
   //No such codec:
   expect(() =>
     encoder.open("file:./no_codec.ogg", 48000, 2, { codec: "libnosuchcodec" })
@@ -97,9 +93,6 @@ Deno.test("Encoder should detect API abuse", (_t: Deno.TestContext) => {
 
   expect(encoder.finalize()).toBeUndefined();
   expect(encoder.close()).toBeUndefined();
-
-  //Cleanup:
-  expect(Deno.removeSync("./test.mp3")).toBeUndefined();
 
   //The close() call should be idempotent:
   expect(encoder.close()).toBeUndefined();

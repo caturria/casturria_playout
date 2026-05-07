@@ -14,6 +14,7 @@
     "filtergraph": "./src/audio/filtergraph.ts",
     "mutex": "./src/audio/mutex.ts",
     "station": "./src/station.ts",
+    "supportlayer": "./src/audio/supportlayer.ts",
     "output": "./src/outputs/output.ts",
     "outputs/standard": "./src/outputs/standard.ts",
     "errors": "./src/errors.ts",
