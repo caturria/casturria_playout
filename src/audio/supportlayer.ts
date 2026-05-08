@@ -37,18 +37,16 @@ type WriteCallback = (data: Uint8Array) => void;
  * The real type is unimportant, and it's largely undocumented anyway.
  * This is here only to allow a custom write callback to be attached to a device node.
  */
-interface Node
-{
-  writeCallback: WriteCallback,
+interface Node {
+  writeCallback: WriteCallback;
 }
 
 /**
  * An oversimplified version of the type that gets passed as the first argument to a device's internal write callback.
  * The only thing we care about is the node field because we monkey-patch it with our own write callback.
  */
-interface HasNode
-{
-  node: Node,
+interface HasNode {
+  node: Node;
 }
 
 /**
@@ -58,17 +56,21 @@ interface HasNode
 interface VirtualDevice {
   //This is the write signature that Emscripten expects, minus the last couple of arguments that appear to always be 0 and undefined respectively.
   //This gets translated into the earlier WriteCallback type that the outside world sees.
-  write: (hasNode: HasNode, mem: Uint8Array, pMem: number, size: number) => void,
+  write: (
+    hasNode: HasNode,
+    mem: Uint8Array,
+    pMem: number,
+    size: number,
+  ) => void;
 }
 
 /**
  * A simplified version of the options type that NODEFS wants (second argument to FS.mount).
  * Only the root field matters for now (it's the location in the VFS to which the host directory gets attached).
  */
-interface Opts
-{
-  root: string,
-};
+interface Opts {
+  root: string;
+}
 
 interface Instance {
   addFunction: (func: EventCallback, signature: string) => number;
@@ -79,25 +81,25 @@ interface Instance {
   HEAPF32: Float32Array;
   FS: {
     filesystems: {
-      NODEFS: never,
-    },
+      NODEFS: never;
+    };
     mount: (fs: never, opts: Opts, realpath: string) => void;
-    mkdir: (name: string) => never;
-    makedev: (ma: number, mi: number) => number,
+    mkdir: (path: string) => never;
+    makedev: (ma: number, mi: number) => number;
     registerDevice: (dev: number, ops: VirtualDevice) => Node;
     mkdev: (path: string, permissions: number, dev: number) => Node;
     readFile: (path: string, opts: {
-      encoding: "binary" | "utf8",
-      flags: string,
-    }) => string| Uint8Array;
-writeFile: (path: string, data: string| ArrayBufferView, opts: {
-  flags: string,
-}) => void;
-  }
+      encoding: "binary" | "utf8";
+      flags: string;
+    }) => string | Uint8Array;
+    writeFile: (path: string, data: string | ArrayBufferView, opts: {
+      flags: string;
+    }) => void;
+  };
 }
 
 const SupportLayer: Instance = await SupportModule.default() as Instance;
-const {FS} = SupportLayer;
+const { FS } = SupportLayer;
 
 const malloc: (size: number) => number = SupportLayer.cwrap(
   "malloc",
@@ -214,19 +216,16 @@ SupportLayer.FS.registerDevice(virtualFile, {
   write: (hasNode: HasNode, mem: Uint8Array, pMem: number, size: number) => {
     hasNode.node.writeCallback(new Uint8Array(mem.slice(pMem, pMem + size)));
     return size;
-
-  }
+  },
 });
 
 /**
  * Register a virtual file at the given path.
  * The data being written will be sent to the provided callback.
  */
-function registerVirtualFile(path: string, write: WriteCallback): void
-{
+function registerVirtualFile(path: string, write: WriteCallback): void {
   const node = SupportLayer.FS.mkdev(path, 0o777, virtualFile);
   node.writeCallback = write;
-
 }
 
 export type AudioBuffer = Float32Array<ArrayBuffer>;
@@ -246,8 +245,8 @@ export {
   casturria_receiveOutput,
   casturria_sendInput,
   free,
+  FS,
   malloc,
   registerVirtualFile,
   SupportLayer as instance,
-  FS,
 };

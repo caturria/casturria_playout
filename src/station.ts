@@ -19,15 +19,13 @@
 
 import * as Validation from "./audio/validation.ts";
 import * as Logtape from "@logtape/logtape";
+import { Output } from "output";
 import * as Errors from "errors";
+import { Source } from "source";
 
-export type StationToken = Record<PropertyKey, never>;
-export type configureSourceCallback = () => void; //Temporary signature because Source doesn't exist yet.
-export type configureOutputCallback = () => void; //Temporary signature because no outputs have been created yet.
-
-const constructorKey = {};
-let stationBeingConfiguredForInput: Station | null = null; //Refers to the station that's currently configuring sources.
-let stationBeingConfiguredForOutput: Station | null = null; //Refers to the station that's currently configuring outputs.
+export type AudioBuffer = Float32Array<ArrayBuffer>;
+const minFrameSize = 64;
+const maxFrameSize = 65536;
 
 export class Station {
   #name: string;
@@ -35,16 +33,45 @@ export class Station {
   #channels: number;
   #logger: Logtape.Logger;
   #startTime: number = 0; //High-res timestamp when the station's clock was started.
+  #samplesPlayed: number = 0; //Total samples emitted since the station was started. Used to keep the clock speed accurate.
   #running: boolean = false;
   #timeout: number = 0; //Current timeout ID while the station is running.
   #timeoutCallback: () => void; //Just an instance-bound tick() for use with setTimeout.
-  #currentTick: Record<PropertyKey, never> = {}; //Used as an authenticator to prove that a call to a source or output came from the station.
+  #outputs: Map<string, Output> = new Map();
+  #currentSource: Source | null = null;
+  #frameSize: number = 0; //How many samples per channel to process per step?
 
   /**
-   * Pulls the next frame from the station's source and sends it to all configured outputs.
+   * Pulls the next frame from the station's source and sends it to all outputs.
    */
   #tick() {
-    this.#timeout = setTimeout(this.#timeoutCallback, 1000); //Temporary.
+    //Get next frame of music ready:
+    const frame = (this.#currentSource as Source).getFrame(this.#frameSize);
+    //Immediately transmit it:
+    this.#outputs.forEach((output) => output.sendFrame(frame as AudioBuffer));
+    //We're slightly ahead of schedule now (unless this was the first frame).
+    //Find out how much time we still have before that frame was due:
+    let timeToTransmition = this.#getTimeToNextTransmition();
+    if (timeToTransmition < 0) {
+      //Todo: handle running late here.
+      //The first batch of samples after station start is due immediately, so a late result is expected.
+      timeToTransmition = 0;
+    }
+    //Rest until the frame we just dispatched comes due
+    this.#timeout = setTimeout(this.#timeoutCallback, timeToTransmition);
+    //Update the clock so that it reflects when the next frame will be due:
+    this.#samplesPlayed += frame.length / this.#channels;
+  }
+
+  /**
+   * Determines how long the station should wait before transmitting its next batch of samples.
+   * Procedure:
+   * Convert total number of samples transmitted to a duration in milliseconds.
+   * Then subtract time elapsed since station started.
+   */
+  #getTimeToNextTransmition() {
+    return ((this.#samplesPlayed / this.#sampleRate) * 1000) -
+      (performance.now() - this.#startTime);
   }
 
   /**
@@ -52,16 +79,25 @@ export class Station {
    * @param name the station's name.
    * @param sampleRate the station's output sampling rate.
    * @param channels the station's output channel count.
+   * @param frameSize how many samples per channel to process per step?
    */
   constructor(
-    key: StationToken,
     name: string,
     sampleRate: number,
     channels: number,
+    frameSize: number,
   ) {
-    if (key !== constructorKey) {
-      throw new TypeError(
-        "The 'Station' constructor is not part of the public API. Please call Station.configure instead.",
+    if (name.length === 0) {
+      throw new RangeError(
+        "The 'length' argument must not be an empty string.",
+      );
+    }
+    if (!Number.isSafeInteger(frameSize)) {
+      throw new TypeError("The 'frameSize' argument must be an integer.");
+    }
+    if (frameSize < minFrameSize || frameSize > maxFrameSize) {
+      throw new RangeError(
+        `The 'frameSize' argument must be an integer between ${minFrameSize} and ${maxFrameSize}.`,
       );
     }
     this.#name = name;
@@ -69,17 +105,7 @@ export class Station {
     this.#channels = Validation.validateChannelCount(channels);
     this.#logger = Logtape.getLogger(["Stations", name]);
     this.#timeoutCallback = this.#tick.bind(this);
-  }
-
-  /**
-   * Internal: used by sources and outputs to confirm that a call came from the station.
-   * @param token an empty object.
-   * @returns true if the call came from the station.
-   */
-  verifyCallFromStation(token: Record<PropertyKey, never>) {
-    if (token !== this.#currentTick) {
-      throw new Errors.NotPublic();
-    }
+    this.#frameSize = frameSize;
   }
 
   get sampleRate() {
@@ -90,58 +116,66 @@ export class Station {
     return this.#channels;
   }
 
+  get name() {
+    return this.#name;
+  }
+
   get logger() {
     return this.#logger;
   }
 
+  get frameSize() {
+    return this.#frameSize;
+  }
+
   /**
-   * Configures a new station.
-   * @param name the station's name for logging purposes.
-   * @param sampleRate the station's output sampling rate.
-   * @param channels the station's output channel count.
-   * @param configureSourceCallback a function that configures and returns the station's input source.
-   * @param configureOutputCallback a function that will configure and return the station's initial outputs.
+   * Checks if an output name has already been registered with the station.
+   * @throws {Errors.AlreadyTaken} if it has.
    */
-  static async configure(
-    name: string,
-    sampleRate: number,
-    channels: number,
-    configureSourceCallback: configureSourceCallback,
-    configureOutputCallback: configureOutputCallback,
-  ): Promise<Station> {
-    if (
-      stationBeingConfiguredForInput !== null ||
-      stationBeingConfiguredForOutput !== null
-    ) {
-      throw new Errors.NotNestable(
-        "Only one station can be configured at a time.",
+  verifyOutputNameAvailability(name: string): void {
+    if (this.#outputs.has(name)) {
+      throw new Errors.AlreadyTaken(
+        `An input called '${name}' is already registered with station '${this.#name}'.`,
       );
     }
+  }
 
-    if (typeof configureSourceCallback !== "function") {
-      throw new TypeError(
-        "The 'configureSourceCallback' argument must be a function.",
-      );
-    }
+  /**
+   * Registers an output with a station.
+   * Should only be called by output factories.
+   * @param output the output being registered.
+   * @throws {Errors.AlreadyTaken} if an output by that name is already registered.
+   */
+  registerOutput(output: Output): void {
+    this.verifyOutputNameAvailability(output.name);
+    this.#outputs.set(name, output);
+  }
 
-    if (typeof configureOutputCallback !== "function") {
-      throw new TypeError(
-        "The 'configureOutputCallback' argument must be a function.",
-      );
+  /**
+   * Unregisters an output.
+   * Idempotent.
+   * The outside world can either call this, or call close() on the respective output.
+   * @param output the output to remove.
+   */
+  removeOutput(output: Output): void {
+    if (this.#outputs.has(output.name)) {
+      this.#outputs.delete(output.name);
+      output.close(); //Close will call here again, but it's already deleted so it doesn't recurse.
     }
-    const station = new Station(constructorKey, name, sampleRate, channels);
-    stationBeingConfiguredForInput = station;
-    stationBeingConfiguredForOutput = station;
-    try {
-      await configureSourceCallback();
-      await configureOutputCallback();
-    } finally {
-      stationBeingConfiguredForInput = null;
-      stationBeingConfiguredForOutput = null;
-    }
+  }
 
-    station.#tick(); //It will continue on its own from here.
-    return station;
+  /**
+   * Starts up the station.
+   * @param source the source to play from.
+   */
+  start(source: Source): void {
+    if (this.#running === true) {
+      throw new Errors.InvalidOperation("This station is already running.");
+    }
+    this.#currentSource = source;
+    this.#startTime = performance.now();
+    this.#samplesPlayed = 0;
+    this.#tick(); //It will run itself from here.
   }
 
   /**
@@ -151,5 +185,6 @@ export class Station {
   close() {
     this.#running = false;
     clearTimeout(this.#timeout);
+    this.#outputs.forEach((output) => output.close());
   }
 }

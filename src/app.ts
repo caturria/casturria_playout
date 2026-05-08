@@ -1,6 +1,6 @@
 /**
 * Casturria playout engine
-* Application entry point.
+* Application entry point
 * Copyright (C) 2026  Jordan Verner and contributors
 
 * This program is free software: you can redistribute it and/or modify

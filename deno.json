@@ -16,7 +16,9 @@
     "station": "./src/station.ts",
     "supportlayer": "./src/audio/supportlayer.ts",
     "output": "./src/outputs/output.ts",
-    "outputs/standard": "./src/outputs/standard.ts",
+    "outputs/file": "./src/outputs/file.ts",
+    "source": "./src/sources/source.ts",
+    "sources/single": "./src/sources/single.ts",
     "errors": "./src/errors.ts",
     "validation": "./src/audio/validation.ts"
   }

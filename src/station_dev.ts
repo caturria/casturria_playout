@@ -1,6 +1,10 @@
 import * as Logtape from "@logtape/logtape";
 import { Station } from "station";
-import { Output } from "output";
+import { FileOutput } from "outputs/file";
+import { Single } from "sources/single";
+import { instance } from "supportlayer";
+import * as Support from "supportlayer";
+const { FS } = instance;
 
 await Logtape.configure({
   sinks: { console: Logtape.getConsoleSink() },
@@ -18,19 +22,32 @@ await Logtape.configure({
   ],
 });
 
-function configureSources() {
-  console.log("Configure sources.");
-}
+FS.mkdir("/output");
+FS.mkdir("/media");
 
-function configureOutputs() {
-  console.log("Configure outputs.");
-}
+FS.mount(FS.filesystems.NODEFS, {
+  root: "/home/caturria/output",
+}, "/output");
+FS.mount(FS.filesystems.NODEFS, {
+  root: "/home/caturria/media",
+}, "/media");
 
-const station = await Station.configure(
+Support.registerVirtualFile("/test.opus", (data: Uint8Array) => {
+  console.log(`Wrote ${data.length} bytes.`);
+});
+
+const station = new Station(
   "test",
   48000,
   2,
-  configureSources,
-  configureOutputs,
+  4096,
 );
+const source = Single.make("/media/tempsong.flac", station);
+const _output = FileOutput.make("Opus", "/test.opus", {
+  bitRate: 192000,
+  pkt_size: 0,
+  blocksize: 64000,
+}, station);
+station.start(source);
+
 setTimeout(() => station.close(), 60000);

@@ -48,14 +48,18 @@ Deno.test("Decoder should detect API abuse", (_t: Deno.TestContext) => {
   expect(encoder.close()).toBeUndefined();
 
   //Corrupt the file by reading and writing it as a UTF-8 string:
-  const buffer = SupportLayer.FS.readFile("test.flac", {encoding: "binary", flags: "r"}) as Uint8Array;
+  const buffer = SupportLayer.FS.readFile("test.flac", {
+    encoding: "binary",
+    flags: "r",
+  }) as Uint8Array;
   const corrupted = new TextDecoder().decode(buffer, {});
 
   expect(
     SupportLayer.FS.writeFile(
       "./corrupted.flac",
       corrupted,
-    {flags: "w"}),
+      { flags: "w" },
+    ),
   ).toBeUndefined();
 
   //The decoder should not be able to open this file:

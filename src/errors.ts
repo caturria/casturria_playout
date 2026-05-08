@@ -18,34 +18,21 @@
 */
 
 /**
- * An internal API was called from outside.
- * As a rule, this should be constructed with no arguments to use the default message.
+ * Something requiring a unique key reports that the key has already been taken.
  */
-
-export class NotPublic extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message ?? "This method is not part of the public API.", options);
-    this.name = "NotPublic";
+export class AlreadyTaken extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AlreadyTaken";
   }
 }
 
 /**
- * Something that does not support nesting was used in a nested fashion
+ * Invalid operation (such as starting a station that's already running).
  */
-
-export class NotNestable extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
+export class InvalidOperation extends Error {
+  constructor(message: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "NotNestable";
-  }
-}
-
-/**
- * The requested operation isn't currently possible.
- */
-export class NotNow extends Error {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "NotNow";
+    name = "InvalidOperation";
   }
 }
