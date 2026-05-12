@@ -1,6 +1,6 @@
 import * as Logtape from "@logtape/logtape";
 import { Station } from "station";
-import { FileOutput } from "outputs/file";
+import { IcecastOutput } from "outputs/icecast";
 import { Single } from "sources/single";
 import { instance } from "supportlayer";
 import * as Support from "supportlayer";
@@ -26,15 +26,11 @@ FS.mkdir("/output");
 FS.mkdir("/media");
 
 FS.mount(FS.filesystems.NODEFS, {
-  root: "/home/caturria/output",
+  root: "c:/users/caturria/output",
 }, "/output");
 FS.mount(FS.filesystems.NODEFS, {
-  root: "/home/caturria/media",
+  root: "c:/users/caturria/media",
 }, "/media");
-
-Support.registerVirtualFile("/test.opus", (data: Uint8Array) => {
-  console.log(`Wrote ${data.length} bytes.`);
-});
 
 const station = new Station(
   "test",
@@ -43,11 +39,16 @@ const station = new Station(
   4096,
 );
 const source = Single.make("/media/tempsong.flac", station);
-const _output = FileOutput.make("Opus", "/test.opus", {
-  bitRate: 192000,
-  pkt_size: 0,
-  blocksize: 64000,
-}, station);
+const _output = await IcecastOutput.make(
+  "Icecast",
+  "http://localhost:8000/stream.opus",
+  "source",
+  "hackme",
+  {
+    codec: "libopus",
+    format: "ogg",
+    bitRate: 192000,
+  },
+  station,
+);
 station.start(source);
-
-setTimeout(() => station.close(), 60000);

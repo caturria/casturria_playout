@@ -17,6 +17,7 @@
     "supportlayer": "./src/audio/supportlayer.ts",
     "output": "./src/outputs/output.ts",
     "outputs/file": "./src/outputs/file.ts",
+    "outputs/icecast": "./src/outputs/icecast.ts",
     "source": "./src/sources/source.ts",
     "sources/single": "./src/sources/single.ts",
     "errors": "./src/errors.ts",

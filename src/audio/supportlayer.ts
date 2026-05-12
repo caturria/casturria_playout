@@ -72,6 +72,14 @@ interface Opts {
   root: string;
 }
 
+/**
+ * An oversimplified representation of the type returned by FS.open().
+ * All we need from this at present is to be able to extract the raw file descriptor.
+ */
+export interface FileStream {
+  fd: number;
+}
+
 interface Instance {
   addFunction: (func: EventCallback, signature: string) => number;
   removeFunction: (handle: number) => void;
@@ -95,6 +103,8 @@ interface Instance {
     writeFile: (path: string, data: string | ArrayBufferView, opts: {
       flags: string;
     }) => void;
+    open(path: string, flags: string, mode: number): FileStream;
+    close: (file: FileStream) => void;
   };
 }
 
